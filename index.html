@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFD600">
+<title>Pesquisa · Aqui Agora</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --amarelo:#FFD600; --magenta:#AD2B8F; --tinta:#8A1D72; --escuro:#4A0D3C; --rosa:#FA86DE; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--amarelo); }
+  body { font-family: 'Poppins', system-ui, sans-serif; color: var(--escuro); }
+  button { font-family: inherit; cursor: pointer; }
+  .tela { max-width: 480px; margin: 0 auto; min-height: 100dvh; padding: 16px 20px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+  .lojas { display: flex; gap: 8px; }
+  .loja { flex: 1 1 0; min-height: 44px; border-radius: 999px; border: 2px solid var(--magenta); background: transparent; color: var(--tinta); font-size: 14px; font-weight: 600; }
+  .loja[aria-pressed="true"] { background: var(--magenta); color: #fff; }
+  .loja-fixa { align-self: flex-start; background: var(--magenta); color: #fff; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 999px; }
+  h1 { margin: 4px 0 0; align-self: flex-start; font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: clamp(40px, 12vw, 52px); line-height: .98; color: var(--magenta); border-bottom: 3px solid var(--magenta); padding-bottom: 4px; text-wrap: balance; }
+  .opcoes { display: flex; flex-direction: column; gap: 8px; }
+  .opcao { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0 18px; border-radius: 999px; border: 3px solid var(--magenta); background: var(--magenta); color: #fff; font-size: 19px; font-weight: 500; text-align: left; transition: transform .08s; }
+  .opcao:active { transform: scale(.98); }
+  .opcao .ico { color: var(--amarelo); display: flex; flex: none; }
+  .opcao .rotulo { flex: 1 1 auto; }
+  .opcao.on { background: var(--rosa); border-color: var(--tinta); color: var(--escuro); }
+  .opcao.on .ico { color: var(--escuro); }
+  .aviso { min-height: 60px; display: flex; align-items: center; }
+  .aviso-dica { width: 100%; text-align: center; font-size: 14px; font-weight: 500; }
+  .toast { width: 100%; display: flex; align-items: center; gap: 12px; background: #fff; border: 3px solid var(--magenta); border-radius: 20px; padding: 10px 12px 10px 16px; }
+  .toast .ok { color: var(--tinta); display: flex; flex: none; }
+  .toast .txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .toast .t1 { font-weight: 600; font-size: 15px; }
+  .toast .t2 { font-size: 13px; font-weight: 500; }
+  .desfazer { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 2px solid var(--magenta); background: var(--amarelo); color: var(--escuro); font-size: 14px; font-weight: 600; }
+  .rodape { margin-top: auto; text-align: center; font-size: 13px; font-weight: 500; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="tela">
+  <div id="lojas"></div>
+  <h1>De onde o cliente veio?</h1>
+  <div class="opcoes" id="opcoes"></div>
+  <div class="aviso" aria-live="polite" id="aviso"></div>
+  <div class="rodape" id="rodape"></div>
+</main>
+
+<script>
+// ============ CONFIGURAÇÃO ============
+// Cole aqui a URL do app da web do Apps Script (termina em /exec).
+// Enquanto estiver vazio, a página funciona em modo demonstração (nada é gravado).
+const API = 'https://script.google.com/macros/s/AKfycbySnDchl_-KN5zWG9PVx4CqBEeOz34pkkY_V4qWQGHFXfXCyRCDaiFCEG5QWRCAIRcJ/exec';
+// ======================================
+
+const LOJAS = { buritis: 'Buritis', machadinho: 'Machadinho', ariquemes: 'Ariquemes' };
+const OPCOES = [
+  { id: 'ig',  rotulo: 'Instagram',       icone: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M17.5 6.5h.01' },
+  { id: 'wa',  rotulo: 'WhatsApp',        icone: 'M3 21l1.6-4.7A8.5 8.5 0 1 1 8 19.6z M9 8.5c0 3.5 3 6.5 6.5 6.5l1-1.5-2-1-1 .8c-1-.4-2-1.4-2.4-2.4l.8-1-1-2z' },
+  { id: 'fb',  rotulo: 'Facebook',        icone: 'M14 8h2.5V4.5H14A3.5 3.5 0 0 0 10.5 8v2H8v3.5h2.5V21H14v-7.5h2.5L17 10h-3V8.5c0-.3.2-.5.5-.5z' },
+  { id: 'ind', rotulo: 'Indicação',       icone: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M3 20v-1a5 5 0 0 1 10 0v1 M16 5.2a3 3 0 0 1 0 5.6 M17 14.2a5 5 0 0 1 4 4.8v1' },
+  { id: 'res', rotulo: 'Resolvi entrar', icone: 'M4 9l1.5-5h13L20 9 M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0A2.7 2.7 0 0 0 20 9 M5 12v8h14v-8 M10 20v-5h4v5' },
+  { id: 'cli', rotulo: 'Já sou cliente',   icone: 'M4.3 15.3V20.5L8 18.6A9 9 0 1 0 4.3 15.3z M12 15.2l-3.1-2.9A2.3 2.3 0 0 1 12 9.1a2.3 2.3 0 0 1 3.1 3.2z' },
+  { id: 'out', rotulo: 'Outro motivo',    icone: 'M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z M8 9h8 M8 13h8 M8 17h5' },
+  { id: 'sem', rotulo: 'Sem resposta',    icone: 'M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M3 21v-1a6 6 0 0 1 7-5.9 M17 22a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M14.6 20.4l4.8-3.8' }
+];
+const svg = (d, w, sw) => '<svg width="' + w + '" height="' + w + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"></path></svg>';
+
+// Loja: vem do link (?loja=ariquemes). Sem o parâmetro, o atendente escolhe nos botões.
+const param = new URLSearchParams(location.search).get('loja');
+const lojaFixa = LOJAS[param] ? param : null;
+let loja = lojaFixa || localStorage.getItem('aq_loja') || 'ariquemes';
+if (!LOJAS[loja]) loja = 'ariquemes';
+
+let ultimo = null;      // { id, source } do registro que ainda pode ser desfeito
+let pendente = false;
+let contagem = 0;
+let timer = null;
+
+// ---------- envio com fila (funciona mesmo com internet ruim) ----------
+let fila = [];
+try { fila = JSON.parse(localStorage.getItem('aq_fila') || '[]'); } catch (e) { fila = []; }
+let enviando = false;
+function salvarFila() { try { localStorage.setItem('aq_fila', JSON.stringify(fila)); } catch (e) {} }
+function enfileirar(item) { fila.push(item); salvarFila(); descarregar(); desenharRodape(); }
+async function descarregar() {
+  if (!API || enviando || !fila.length) return;
+  enviando = true;
+  try {
+    while (fila.length) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(fila[0]) });
+      const j = await r.json();
+      if (j.ok || j.error === 'dados invalidos') { fila.shift(); salvarFila(); desenharRodape(); }
+      else break;
+    }
+  } catch (e) { /* sem conexão: tenta de novo depois */ }
+  enviando = false;
+  desenharRodape();
+}
+setInterval(descarregar, 8000);
+addEventListener('online', descarregar);
+
+// ---------- ações ----------
+function novoId() {
+  return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+}
+function escolher(source) {
+  if (pendente && ultimo.source === source) return;
+  if (pendente) {
+    ultimo.source = source;                       // corrigiu a resposta sem contar duas vezes
+    enfileirar({ action: 'update', id: ultimo.id, source: source });
+  } else {
+    ultimo = { id: novoId(), source: source };
+    contagem++;
+    pendente = true;
+    enfileirar({ action: 'add', id: ultimo.id, store: loja, source: source });
+  }
+  clearTimeout(timer);
+  timer = setTimeout(() => { pendente = false; ultimo = null; desenhar(); }, 3500);
+  desenhar();
+  if (navigator.vibrate) navigator.vibrate(20);
+}
+function desfazer() {
+  if (!pendente) return;
+  clearTimeout(timer);
+  enfileirar({ action: 'undo', id: ultimo.id });
+  contagem = Math.max(0, contagem - 1);
+  pendente = false; ultimo = null;
+  desenhar();
+}
+function trocarLoja(l) { loja = l; try { localStorage.setItem('aq_loja', l); } catch (e) {} desenhar(); }
+
+// ---------- tela ----------
+function desenharRodape() {
+  let t = contagem + (contagem === 1 ? ' registro' : ' registros') + ' nesta sessão';
+  if (!API) t += ' · modo demonstração: nada é gravado';
+  else if (fila.length) t += ' · ' + fila.length + ' aguardando envio';
+  document.getElementById('rodape').textContent = t;
+}
+function desenhar() {
+  const bl = document.getElementById('lojas');
+  if (lojaFixa) {
+    bl.innerHTML = '<span class="loja-fixa">Loja ' + LOJAS[lojaFixa] + '</span>';
+  } else {
+    bl.className = 'lojas';
+    bl.innerHTML = Object.keys(LOJAS).map(k =>
+      '<button class="loja" data-loja="' + k + '" aria-pressed="' + (k === loja) + '">' + LOJAS[k] + '</button>').join('');
+    bl.querySelectorAll('button').forEach(b => b.onclick = () => trocarLoja(b.dataset.loja));
+  }
+  const ob = document.getElementById('opcoes');
+  ob.innerHTML = OPCOES.map(o => {
+    const on = pendente && ultimo.source === o.id;
+    return '<button class="opcao' + (on ? ' on' : '') + '" data-id="' + o.id + '">' +
+      '<span class="ico">' + svg(o.icone, 30, 1.7) + '</span><span class="rotulo">' + o.rotulo + '</span>' +
+      '<span class="ico">' + svg(on ? 'M20 6L9 17l-5-5' : 'M9 5l7 7-7 7', 26, 2.2) + '</span></button>';
+  }).join('');
+  ob.querySelectorAll('button').forEach(b => b.onclick = () => escolher(b.dataset.id));
+
+  const av = document.getElementById('aviso');
+  if (pendente) {
+    const nome = OPCOES.find(o => o.id === ultimo.source).rotulo;
+    av.innerHTML = '<div class="toast"><span class="ok">' + svg('M20 6L9 17l-5-5', 26, 2.4) + '</span>' +
+      '<div class="txt"><span class="t1">Registrado</span><span class="t2">' + nome + ' · ' + LOJAS[loja] + '</span></div>' +
+      '<button class="desfazer" id="desfazer">Desfazer</button></div>';
+    document.getElementById('desfazer').onclick = desfazer;
+  } else {
+    av.innerHTML = '<span class="aviso-dica">Toque na resposta do cliente. Um toque já registra.</span>';
+  }
+  desenharRodape();
+}
+desenhar();
+descarregar();
+</script>
+</body>
+</html>
